@@ -75,25 +75,55 @@ vector<int> mess_detection::Kmpsearch(const string& text, const string& pattern)
 	return matches;
 }
 
+//计算汉字字符数
+int countUTF8Chars(const string& str) {
+	int count = 0;
+	for (size_t i = 0; i < str.length(); ) {
+		if ((str[i] & 0x80) == 0) {
+			// ASCII字符 (0xxxxxxx)
+			i++;
+			count++;
+		}
+		else if ((str[i] & 0xE0) == 0xC0) {
+			// 2字节UTF-8字符
+			i += 2;
+			count++;
+		}
+		else if ((str[i] & 0xF0) == 0xE0) {
+			// 3字节UTF-8字符 (汉字常用)
+			i += 3;
+			count++;
+		}
+		else if ((str[i] & 0xF8) == 0xF0) {
+			// 4字节UTF-8字符
+			i += 4;
+			count++;
+		}
+		else {
+			// 错误或未知字节，只跳过，不计数
+			i++;
+		}
+	}
+	return count;
+}
+
+
 string mess_detection::maskSensitiveWords(const string& text) {
 	init_voc();
 	string maskedText = text;
-	//int charlen = 0;
 	for (const auto& word : Sensitive_lexicon) {
 		vector<int> matches = Kmpsearch(maskedText, word); 
-		for (int pos : matches) {//这个循环是获取matches中的敏感词汇 起始位置 将词汇 用*代替
-			//size_t charLen = 0;
-			for (int i = 0; i < word.size(); ++i) {
-				maskedText[pos + i] = '*';
-				/*if (maskedText[pos + i] >= 0x81 && maskedText[pos + i] <= 0xFE) {
-					charLen = 2;
-				}
-				else charlen = 1;
-
-				maskedText.replace(pos + i, charlen, "*");
-				i += charlen - 1;*/
-			}
-
+		// 从后往前替换，避免位置偏移问题
+		for (int i = matches.size() - 1; i >= 0; i--) {
+			int pos = matches[i];
+			// 计算敏感词的字符数量（不是字节数量）
+			int charCount = countUTF8Chars(word);
+			cout << charCount << endl;
+			
+			// 用相应数量的*替换
+			string replacement(charCount, '*');
+			maskedText.erase(pos, word.length());
+			maskedText.insert(pos, string(charCount, '*'));
 		}
 	}
 	return maskedText;
@@ -107,10 +137,8 @@ int main() {
 	string maskedText;
 	mess_detection m;
 	cout << "请输入一个待检测的字符串\n";
-	cin >> pattern;
+	getline(cin, pattern);
 	maskedText = m.maskSensitiveWords(pattern);
 	cout << "过滤结果为：\n";
 	cout << maskedText << '\n';
 }
-
-
